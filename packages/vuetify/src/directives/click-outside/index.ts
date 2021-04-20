@@ -48,6 +48,23 @@ function directive (e: PointerEvent, el: HTMLElement, binding: ClickOutsideDirec
   }, 0)
 }
 
+function handleShadow(el: HTMLElement, callback: Function): void {
+  const root = attachedRoot(el) ?? document.body
+
+  // iOS does not recognize click events on document
+  // or body, this is the entire purpose of the v-app
+  // component and [data-app], stop removing this
+  const app = root.querySelector('[data-app]') ??
+    root // This is only for unit tests
+  callback(app)
+
+  if (root instanceof ShadowRoot) {
+    const hostApp = document.querySelector('[data-app]') ??
+      document.body
+    callback(hostApp)
+  }
+}
+
 export const ClickOutside = {
   // [data-app] may not be found
   // if using bind, inserted makes
@@ -56,31 +73,17 @@ export const ClickOutside = {
   // clicks on body
   inserted (el: HTMLElement, binding: ClickOutsideDirective) {
     const onClick = (e: Event) => directive(e as PointerEvent, el, binding)
-    const root = attachedRoot(el)
-    if (!root) return
-
-    // iOS does not recognize click events on document
-    // or body, this is the entire purpose of the v-app
-    // component and [data-app], stop removing this
-    const app = root.querySelector('[data-app]') ||
-      document.body // This is only for unit tests
-    app.addEventListener('click', onClick, true)
-
-    if (root instanceof ShadowRoot) {
-      const hostApp = document.querySelector('[data-app]') ||
-        document.body
-      hostApp.addEventListener('click', onClick, true)
-    }
-
+    handleShadow(el, (app: HTMLElement) => {
+      app.addEventListener('click', onClick, true)
+    });
     el._clickOutside = onClick
   },
 
   unbind (el: HTMLElement) {
-    if (!el._clickOutside) return
-
-    const app = document.querySelector('[data-app]') ||
-      document.body // This is only for unit tests
-    app && app.removeEventListener('click', el._clickOutside, true)
+    handleShadow(el, (app: HTMLElement) => {
+      if(!app || !el._clickOutside) return
+      app.removeEventListener('click', el._clickOutside, true)
+    })
     delete el._clickOutside
   },
 }
