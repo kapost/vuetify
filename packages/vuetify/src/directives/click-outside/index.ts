@@ -1,3 +1,4 @@
+import { attachedRoot } from '../../util/dom'
 import { VNodeDirective } from 'vue/types/vnode'
 
 interface ClickOutsideBindingArgs {
@@ -25,6 +26,12 @@ function directive (e: PointerEvent, el: HTMLElement, binding: ClickOutsideDirec
   // with non-toggleable components
   if (!e || isActive(e) === false) return
 
+  // If we're clicking inside the shadowroot, then the app root doesn't get the same
+  // level of introspection as to _what_ we're clicking. We want to check to see if
+  // our target is the shadowroot parent container, and if it is, ignore.
+  const root = attachedRoot(el)
+  if (root instanceof ShadowRoot && root.host === e.target) return
+
   // Check if additional elements were passed to be included in check
   // (click must be outside all included elements, if any)
   const elements = ((typeof binding.value === 'object' && binding.value.include) || (() => []))()
@@ -49,12 +56,22 @@ export const ClickOutside = {
   // clicks on body
   inserted (el: HTMLElement, binding: ClickOutsideDirective) {
     const onClick = (e: Event) => directive(e as PointerEvent, el, binding)
+    const root = attachedRoot(el)
+    if (!root) return
+
     // iOS does not recognize click events on document
     // or body, this is the entire purpose of the v-app
     // component and [data-app], stop removing this
-    const app = document.querySelector('[data-app]') ||
+    const app = root.querySelector('[data-app]') ||
       document.body // This is only for unit tests
     app.addEventListener('click', onClick, true)
+
+    if (root instanceof ShadowRoot) {
+      const hostApp = document.querySelector('[data-app]') ||
+        document.body
+      hostApp.addEventListener('click', onClick, true)
+    }
+
     el._clickOutside = onClick
   },
 
